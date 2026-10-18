@@ -1,0 +1,16 @@
+{
+  "name": "meu-dinheiro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Finanças pessoais (PWA) com Neon Postgres como armazenamento.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

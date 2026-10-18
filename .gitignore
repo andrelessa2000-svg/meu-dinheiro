@@ -1,0 +1,13 @@
+# Dependencias
+node_modules/
+
+# Segredos e dados locais (NUNCA versionar)
+.env
+.local-data.json
+
+# Vercel
+.vercel
+
+# Sistema
+.DS_Store
+Thumbs.db
