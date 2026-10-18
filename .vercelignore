@@ -1,0 +1,9 @@
+# Arquivos que NAO devem ir para o Vercel (sao apenas para rodar no PC).
+# O Vercel deve publicar o site estatico + as functions em /api.
+server.js
+iniciar-local.bat
+meu_dinheiro.html
+schema.sql
+README.md
+.local-data.json
+.vercel

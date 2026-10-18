@@ -1,5 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "builds": [
+    { "src": "api/data.js", "use": "@vercel/node" },
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "manifest.webmanifest", "use": "@vercel/static" },
+    { "src": "sw.js", "use": "@vercel/static" },
+    { "src": "icons/icon-192.png", "use": "@vercel/static" },
+    { "src": "icons/icon-512.png", "use": "@vercel/static" }
+  ],
+  "rewrites": [
+    { "source": "/api/data", "destination": "/api/data.js" }
+  ],
   "headers": [
     {
       "source": "/sw.js",

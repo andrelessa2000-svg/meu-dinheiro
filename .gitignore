@@ -3,6 +3,7 @@ node_modules/
 
 # Segredos e dados locais (NUNCA versionar)
 .env
+.env.local
 .local-data.json
 
 # Vercel

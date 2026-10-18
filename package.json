@@ -7,9 +7,6 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4"
   }
