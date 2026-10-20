@@ -111,6 +111,7 @@ categories:(()=>{const def=['Moradia','Alimentação','Transporte','Saúde','Edu
 profile:{income:n(d.profile&&d.profile.income),commitment:Math.min(100,Math.max(1,n(d.profile&&d.profile.commitment,70)))},loans:A('loans').filter(ok).map((x,i)=>({id:id(x,i),name:S(x.name),principal:n(x.principal),rate:n(x.rate,0),ratePeriod:S(x.ratePeriod)==='aa'?'aa':'am',months:Math.max(1,Math.min(600,Math.round(n(x.months)))),startDate:/^\d{4}-\d{2}/.test(S(x.startDate))?S(x.startDate).slice(0,7):curMonth(),paid:Math.max(0,Math.round(n(x.paid))),day:Math.min(28,Math.max(1,Math.round(n(x.day,10)))),amortization:S(x.amortization)==='sac'?'sac':'price'}))}}
 // --- Sessão: o login (token) fica no navegador; o banco (Neon, via /api/data)
 //     é a fonte de verdade e o localStorage guarda uma cópia como cache/offline. ---
+const APP_VERSION='12';
 const SESSION_KEY='meuDinheiroSession', USER_KEY='meuDinheiroUser';
 let sessionToken='';try{sessionToken=localStorage.getItem(SESSION_KEY)||''}catch(e){}
 let currentUser='';try{currentUser=localStorage.getItem(USER_KEY)||''}catch(e){}
@@ -321,6 +322,7 @@ html=`<div class="card"><div class="row"><div><div class="section">Sua conta</di
 <div class="row"><div class="field" style="flex:1;margin:0"><input id="newCatName" placeholder="Nova categoria" maxlength="40"></div><button class="btn" id="addCat">＋ Adicionar</button></div>
 ${catsList}
 <div class="notice">Categorias personalizadas aparecem nos lançamentos e contas recorrentes. As padrão não podem ser excluídas.</div></div>
+<div class="card" style="margin-top:14px"><div class="section">Aplicativo</div><div class="row"><div><b>Forçar atualização</b><div class="muted">Limpa o cache e carrega a versão mais recente.</div></div><button class="btn secondary" id="forceUpdate">Atualizar agora</button></div></div>
 <div class="card" style="margin-top:14px"><div class="section">Dados e cópias de segurança</div><div class="row"><div><b>Exportar backup JSON</b><div class="muted">Salva todos os dados cadastrados.</div></div><button class="btn secondary" id="exportJson">Exportar</button></div><div class="row"><div><b>Restaurar backup JSON</b><div class="muted">Substitui os dados atuais pelo arquivo escolhido.</div></div><button class="btn secondary" id="importJson">Importar</button><input type="file" id="importFile" accept=".json,application/json" hidden></div><div class="row"><div><b>Exportar lançamentos CSV</b><div class="muted">Para abrir em planilhas.</div></div><button class="btn secondary" id="exportCsv">Exportar</button></div><div class="row"><span>Total de lançamentos</span><b>${data.transactions.length}</b></div><div class="notice">Atenção: limpar os dados do navegador apenas remove o cache local; o banco continua intacto. O botão “Apagar todos os dados” substitui o conteúdo do banco. Este é um aplicativo pessoal, não um sistema bancário auditado.</div><button class="btn danger" id="resetData">Restaurar dados de demonstração</button> <button class="btn danger" id="clearData">Apagar todos os dados</button></div>`;
 }
 $('content').innerHTML=html;bind();
@@ -418,7 +420,8 @@ if($('saveBudget'))$('saveBudget').onclick=()=>{let income=+$('budgetIncome').va
 if($('fcastIncome'))$('fcastIncome').onchange=e=>{fcastIncome=Number(e.target.value);render()};
 if($('fcastScenario'))$('fcastScenario').onchange=e=>{fcastScenario=e.target.value;render()};
 if($('fcastGrowth'))$('fcastGrowth').onchange=e=>{fcastGrowth=Number(e.target.value)||0;render()};
-if($('exportJson'))$('exportJson').onclick=exportJson;if($('exportCsv'))$('exportCsv').onclick=exportCsv;
+if($('exportJson'))$('exportJson').onclick=exportJson;
+if($('forceUpdate'))$('forceUpdate').onclick=async()=>{try{if('serviceWorker' in navigator){const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister()}if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}localStorage.removeItem('meuDinheiroData');alert('Aplicativo atualizado. Vamos recarregar.');location.reload()}catch(e){alert('Não foi possível atualizar: '+e.message)}};if($('exportCsv'))$('exportCsv').onclick=exportCsv;
 if($('importJson'))$('importJson').onclick=()=>$('importFile').click();
 if($('importFile'))$('importFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let d=JSON.parse(await f.text());if(!Array.isArray(d.transactions)||!Array.isArray(d.bills)||!Array.isArray(d.cards)||!Array.isArray(d.installments)||!Array.isArray(d.goals)||!d.profile)throw Error();if(confirm('Substituir os dados atuais pela cópia importada?')){data=sanitize(d);fixInst();save();render();alert('Backup restaurado.')}}catch(err){alert('Arquivo inválido ou incompatível.')}e.target.value=''};
 if($('resetData'))$('resetData').onclick=()=>{if(confirm('Restaurar dados de demonstração? Os dados atuais serão substituídos.')){data=seed();fixInst();save();render()}};
@@ -472,6 +475,7 @@ if(inst&&!confirm(`Existe uma compra parcelada parecida: “${inst.name}” (${m
 if(type==='expense'&&!editId&&$('txMethod').value==='Cartão de crédito'&&!confirm('Compra no cartão: lance cada compra uma única vez. Se for parcelada, cadastre em “Cartões e parcelas” pelo valor TOTAL. Não lance o pagamento da fatura, pois ele repete compras já registradas. Continuar com este lançamento avulso?'))return;let duplicate=data.transactions.some(x=>x.id!==editId&&x.type===type&&x.desc.trim().toLowerCase()===desc.toLowerCase()&&x.amount===amount&&x.date===date);if(duplicate&&!confirm('Já existe um lançamento com mesmo tipo, descrição, valor e data. Deseja cadastrar mesmo assim?'))return;{let rec={type,amount,desc,cat:$('txCat').value,date,method:$('txMethod').value,account:$('txAccount').value?Number($('txAccount').value):undefined};if(editId){let t0=data.transactions.find(x=>x.id===editId);if(t0)Object.assign(t0,rec)}else data.transactions.push({id:Date.now(),...rec})}save();closeModal();page='transactions';filter='all';render();$('txForm').reset()};
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{page=b.dataset.page;render()}));
 async function init(){
+  document.querySelectorAll('.footer').forEach(f=>{f.textContent=f.textContent.replace(/ \u00b7 v\d+$/,'')+' \u00b7 v'+APP_VERSION;});
   fixInst();updateWhoami();setSync('idle','Conectando...');
   let cached=null;try{cached=JSON.parse(localStorage.getItem('meuDinheiroData')||'null')}catch(e){}
   if(!sessionToken){data=(cached&&Array.isArray(cached.transactions))?sanitize(cached):emptyData();fixInst();render();showAuth();return;}

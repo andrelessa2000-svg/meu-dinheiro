@@ -6,7 +6,7 @@
 // - As chamadas /api/data sao SEMPRE de rede (dados vem do banco), com o
 //   localStorage do app servindo de cache/offline dos registros.
 
-const CACHE = 'meu-dinheiro-v11';
+const CACHE = 'meu-dinheiro-v12';
 const ASSETS = [
   './',
   './index.html',
@@ -39,7 +39,24 @@ self.addEventListener('fetch', (event) => {
   // API: rede primeiro, nunca cache.
   if (url.pathname.startsWith('/api/')) return;
 
-  // Resto: cache primeiro, com atualizacao em segundo plano.
+  // Paginas/HTML: REDE PRIMEIRO (sempre pega a versao nova); cache so como fallback offline.
+  const isDoc = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
+  if (isDoc) {
+    event.respondWith(
+      fetch(req, { cache: 'no-store' })
+        .then((resp) => {
+          if (resp && resp.ok) {
+            const copy = resp.clone();
+            caches.open(CACHE).then((c) => c.put('./index.html', copy)).catch(() => {});
+          }
+          return resp;
+        })
+        .catch(() => caches.match('./index.html').then((r) => r || caches.match(req)))
+    );
+    return;
+  }
+
+  // Demais arquivos: cache primeiro, com atualizacao em segundo plano.
   event.respondWith(
     caches.match(req).then((cached) => {
       const fromNet = fetch(req)
@@ -50,7 +67,7 @@ self.addEventListener('fetch', (event) => {
           }
           return resp;
         })
-        .catch(() => cached || caches.match('./index.html'));
+        .catch(() => cached);
       return cached || fromNet;
     })
   );
