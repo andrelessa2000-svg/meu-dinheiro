@@ -48,9 +48,10 @@ const MIME = {
 
 // Arquivos/servidor que NAO devem ser servidos como estaticos.
 const BLOCKED = new Set([
-  'server.js', 'package.json', 'package-lock.json', '.env', '.env.example',
+  'server.js', 'package.json', 'package-lock.json', '.env', '.env.local', '.env.example', '.env.production', '.env.development', '.env.test',
   '.local-data.json', 'schema.sql', 'README.md', 'iniciar-local.bat',
-  'vercel.json', '.gitignore', '.vercelignore', 'meu_dinheiro.html'
+  'vercel.json', '.gitignore', '.vercelignore', 'meu_dinheiro.html',
+  '_cleanup_testusers.mjs'
 ]);
 const BLOCKED_DIRS = new Set(['.git', 'node_modules', 'lib', 'api', 'legacy']);
 
@@ -115,7 +116,7 @@ async function handleAuth(req, res) {
     return sendJson(res, 400, { error: 'Ação inválida.' });
   } catch (e) {
     console.error('Erro em /api/auth:', e);
-    sendJson(res, 500, { error: 'server error', detail: String((e && e.message) || e) });
+    sendJson(res, 500, { error: 'server error' });
   }
 }
 
@@ -144,12 +145,13 @@ async function handleData(req, res) {
     res.end();
   } catch (e) {
     console.error('Erro em /api/data:', e);
-    sendJson(res, 500, { error: 'server error', detail: String((e && e.message) || e) });
+    sendJson(res, 500, { error: 'server error' });
   }
 }
 
 function serveStatic(req, res) {
-  let rel = decodeURIComponent((req.url || '/').split('?')[0]);
+  let rel;
+  try { rel = decodeURIComponent((req.url || '/').split('?')[0]); } catch (e) { res.writeHead(400); return res.end('bad request'); }
   if (rel === '/') rel = '/index.html';
   const relPath = rel.replace(/^\/+/, '');
   const parts = relPath.split('/');
