@@ -1,27 +1,31 @@
 'use strict';
 
 // Function serverless do Vercel: /api/data
-// GET  -> devolve o objeto salvo (ou null)
-// PUT  -> grava o objeto (last-write-wins)
+// GET  -> devolve o objeto salvo do usuario logado (ou null)
+// PUT  -> grava o objeto do usuario logado (last-write-wins)
 //
-// Usa a mesma lib/db.js do servidor local. A DATABASE_URL (Neon) deve estar
-// configurada nas Environment Variables do projeto no Vercel.
+// Autenticacao: header "Authorization: Bearer <token de sessao>" (vindo de /api/auth).
 
-const { getData, setData } = require('../lib/db');
+const { getUserByToken, getData, setData } = require('../lib/db');
 
-function authorized(req) {
-  const token = process.env.APP_TOKEN || '';
-  if (!token) return true;
+function bearer(req) {
   const h = req.headers['authorization'] || '';
-  return h === 'Bearer ' + token || req.headers['x-app-token'] === token;
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
 }
 
 module.exports = async (req, res) => {
-  if (!authorized(req)) return res.status(401).json({ error: 'unauthorized' });
+  let user;
+  try {
+    user = await getUserByToken(bearer(req));
+  } catch (e) {
+    console.error('Erro ao validar sessao:', e);
+    return res.status(500).json({ error: 'server error' });
+  }
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
 
   try {
     if (req.method === 'GET') {
-      const data = await getData();
+      const data = await getData(user.id);
       return res.status(200).json(data == null ? null : data);
     }
     if (req.method === 'PUT' || req.method === 'POST') {
@@ -29,7 +33,7 @@ module.exports = async (req, res) => {
       if (payload == null || typeof payload !== 'object') {
         return res.status(400).json({ error: 'bad body' });
       }
-      await setData(payload);
+      await setData(user.id, payload);
       return res.status(200).json({ ok: true });
     }
     res.setHeader('Allow', 'GET, PUT');

@@ -2,8 +2,8 @@
 
 // Servidor local do Meu Dinheiro.
 // - Serve os arquivos estaticos (index.html, manifest, sw.js, icons...).
-// - Expoe a API em /api/data (GET/PUT) usando lib/db.js.
-// - Le as variaveis de .env (DATABASE_URL, APP_TOKEN, PORT) sem depender de dotenv.
+// - Expoe a API: /api/auth (register/login/logout) e /api/data (por sessao).
+// - Le as variaveis de .env (DATABASE_URL, PORT) sem depender de dotenv.
 //
 // Uso:  node server.js   (ou use o iniciar-local.bat)
 
@@ -27,11 +27,11 @@ const path = require('path');
   } catch (e) { /* sem .env: tudo bem */ }
 })();
 
-const { getData, setData, useDb } = require('./lib/db');
+const { hashPassword, verifyPassword } = require('./lib/auth');
+const db = require('./lib/db');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT) || 8080;
-const TOKEN = process.env.APP_TOKEN || '';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -50,46 +50,101 @@ const MIME = {
 const BLOCKED = new Set([
   'server.js', 'package.json', 'package-lock.json', '.env', '.env.example',
   '.local-data.json', 'schema.sql', 'README.md', 'iniciar-local.bat',
-  'vercel.json', '.gitignore', 'meu_dinheiro.html'
+  'vercel.json', '.gitignore', '.vercelignore', 'meu_dinheiro.html'
 ]);
 const BLOCKED_DIRS = new Set(['.git', 'node_modules', 'lib', 'api', 'legacy']);
 
-function authorized(req) {
-  if (!TOKEN) return true;
-  const h = req.headers['authorization'] || '';
-  return h === 'Bearer ' + TOKEN || req.headers['x-app-token'] === TOKEN;
-}
-
 function sendJson(res, code, obj) {
-  const body = JSON.stringify(obj);
-  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
-  res.end(body);
+  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(obj));
 }
 
-async function handleApi(req, res) {
-  if (!authorized(req)) return sendJson(res, 401, { error: 'unauthorized' });
+function bearer(req) {
+  const h = req.headers['authorization'] || '';
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+}
+
+async function readJson(req) {
+  let body = '';
+  for await (const chunk of req) body += chunk;
+  if (!body) return null;
+  return JSON.parse(body);
+}
+
+function normUser(v) {
+  return String(v || '').trim().toLowerCase();
+}
+
+async function handleAuth(req, res) {
+  if (req.method !== 'POST') { res.writeHead(405, { allow: 'POST' }); return res.end(); }
+  let body;
+  try { body = await readJson(req); }
+  catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
+  body = body || {};
+  const action = String(body.action || '').toLowerCase();
+  try {
+    if (action === 'register' || action === 'login') {
+      const username = normUser(body.username);
+      const password = String(body.password || '');
+      if (username.length < 3) return sendJson(res, 400, { error: 'O usuário deve ter ao menos 3 caracteres.' });
+      if (password.length < 6) return sendJson(res, 400, { error: 'A senha deve ter ao menos 6 caracteres.' });
+
+      if (action === 'register') {
+        let user;
+        try { user = await db.createUser(username, hashPassword(password)); }
+        catch (e) {
+          if (e && e.code === 'USER_EXISTS') return sendJson(res, 409, { error: 'Este usuário já existe. Faça login.' });
+          throw e;
+        }
+        const token = await db.createSession(user.id);
+        return sendJson(res, 200, { token, username: user.username });
+      }
+
+      const user = await db.getUserByUsername(username);
+      if (!user || !verifyPassword(password, user.password_hash)) {
+        return sendJson(res, 401, { error: 'Usuário ou senha inválidos.' });
+      }
+      const token = await db.createSession(user.id);
+      return sendJson(res, 200, { token, username: user.username });
+    }
+    if (action === 'logout') {
+      const t = bearer(req);
+      if (t) await db.deleteSession(t);
+      return sendJson(res, 200, { ok: true });
+    }
+    return sendJson(res, 400, { error: 'Ação inválida.' });
+  } catch (e) {
+    console.error('Erro em /api/auth:', e);
+    sendJson(res, 500, { error: 'server error', detail: String((e && e.message) || e) });
+  }
+}
+
+async function handleData(req, res) {
+  let user;
+  try { user = await db.getUserByToken(bearer(req)); }
+  catch (e) { console.error('Erro ao validar sessao:', e); return sendJson(res, 500, { error: 'server error' }); }
+  if (!user) return sendJson(res, 401, { error: 'unauthorized' });
+
   try {
     if (req.method === 'GET') {
-      const data = await getData();
+      const data = await db.getData(user.id);
       return sendJson(res, 200, data == null ? null : data);
     }
     if (req.method === 'PUT' || req.method === 'POST') {
-      let body = '';
-      for await (const chunk of req) body += chunk;
       let payload;
-      try { payload = JSON.parse(body || 'null'); }
+      try { payload = await readJson(req); }
       catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
       if (payload == null || typeof payload !== 'object') {
         return sendJson(res, 400, { error: 'bad body' });
       }
-      await setData(payload);
+      await db.setData(user.id, payload);
       return sendJson(res, 200, { ok: true });
     }
     res.writeHead(405, { allow: 'GET, PUT' });
     res.end();
   } catch (e) {
     console.error('Erro em /api/data:', e);
-    sendJson(res, 500, { error: 'server error', detail: String(e && e.message || e) });
+    sendJson(res, 500, { error: 'server error', detail: String((e && e.message) || e) });
   }
 }
 
@@ -117,7 +172,8 @@ function serveStatic(req, res) {
 
 const server = http.createServer((req, res) => {
   const pathname = (req.url || '/').split('?')[0];
-  if (pathname === '/api/data') return handleApi(req, res);
+  if (pathname === '/api/auth') return handleAuth(req, res);
+  if (pathname === '/api/data') return handleData(req, res);
   if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'not found' });
   return serveStatic(req, res);
 });
@@ -125,13 +181,13 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log('');
   console.log('  Meu Dinheiro  ->  http://localhost:' + PORT);
-  if (useDb()) {
+  if (db.useDb()) {
     console.log('  Banco: Neon Postgres (DATABASE_URL definida)');
   } else {
     console.log('  Banco: arquivo local .local-data.json (modo de teste)');
     console.log('  Para usar o Neon, crie o arquivo .env com DATABASE_URL=...');
   }
-  if (TOKEN) console.log('  Protegido por token (APP_TOKEN).');
+  console.log('  Login multiusuario ativo (/api/auth).');
   console.log('  Pressione Ctrl+C para parar.');
   console.log('');
 });
