@@ -6,7 +6,7 @@
 // - As chamadas /api/data sao SEMPRE de rede (dados vem do banco), com o
 //   localStorage do app servindo de cache/offline dos registros.
 
-const CACHE = 'meu-dinheiro-v12';
+const CACHE = 'meu-dinheiro-v13';
 const ASSETS = [
   './',
   './index.html',
