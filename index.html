@@ -406,9 +406,9 @@ const hInstNextHtml=hInstHtml(hInstNext,'Parcelas a vencer no próximo mês',nex
 const hInstLastThis=data.installments.filter(x=>{
  const lastIdx=Number(x.total)-1;
  const lastMonth=monthShift(x.startDate,lastIdx);
- return lastMonth===viewMonth && (Number(x.paid)||0)===lastIdx;
+ return lastMonth===viewMonth;
 });
-const hInstLastHtml=hInstLastThis.length?`<div class="card" style="margin-top:14px"><div class="row"><div class="section">Compras quitadas este mês (última parcela)</div><span class="muted">${money(hInstLastThis.reduce((s,x)=>s+x.amount,0))}</span></div>${hInstLastThis.map(x=>`<div class="row"><div style="flex:1;min-width:0"><div class="name">${esc(x.name)}</div><div class="detail">${x.card?esc(data.cards.find(c=>c.id===x.card)?.name||'Cartão'):'Não é cartão / Outro'} · ${x.paid}/${x.total} pagas · parcela final ${monthShift(x.startDate,x.total-1).split('-').reverse().join('/')}</div></div><b class="green">${money(x.amount)}</b></div>`).join('')}</div>`:'';
+const hInstLastHtml=hInstLastThis.length?`<div class="card" style="margin-top:14px"><div class="row"><div class="section">Última parcela vence este mês</div><span class="muted">${money(hInstLastThis.reduce((s,x)=>s+x.amount,0))}</span></div>${hInstLastThis.map(x=>{const fullyPaid=(Number(x.paid)||0)>=Number(x.total);return `<div class="row"><div style="flex:1;min-width:0"><div class="name">${esc(x.name)}</div><div class="detail">${x.card?esc(data.cards.find(c=>c.id===x.card)?.name||'Cartão'):'Não é cartão / Outro'} · ${x.paid}/${x.total} pagas · parcela final ${monthShift(x.startDate,x.total-1).split('-').reverse().join('/')}${fullyPaid?' · <span class="green">QUITADA</span>':''}</div></div><b class="${fullyPaid?'green':'red'}">${money(x.amount)}</b></div>`}).join('')}</div>`:'';
 const hInvProjected=data.investments.reduce((s,x)=>s+invValueAt(x,invHorizon(x)),0);
 const hInvCard=data.investments.length?`<div class="row"><span>Total investido</span><b class="green">${money(hInv)}</b></div><div class="row"><span>Valor projetado</span><b>${money(hInvProjected)}</b></div><div class="row"><span>Rendimento estimado</span><b class="green">${money(hInvProjected-hInv)}</b></div>`:empty('Nenhuma aplicação registrada. Vá em Investimentos.');
 html=`${monthNav()}
