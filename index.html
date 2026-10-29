@@ -400,15 +400,18 @@ const nextMonth=monthShift(viewMonth,1);
 const hInstThis=installmentItems(viewMonth).filter(x=>!x.paid).sort((a,b)=>a.card-b.card);
 const hInstNext=installmentItems(nextMonth).filter(x=>!x.paid).sort((a,b)=>a.card-b.card);
 const hInstHtml=(arr,label,monthKey)=>{if(!arr.length)return '';return `<div class="card" style="margin-top:14px"><div class="row"><div class="section">${label}</div><span class="muted">${money(arr.reduce((s,x)=>s+x.amount,0))}</span></div>${arr.map(x=>`<div class="row"><div style="flex:1;min-width:0"><div class="name">${esc(x.desc)}</div><div class="detail">${x.card?esc(data.cards.find(c=>c.id===x.card)?.name||'Cartão'):'Não é cartão / Outro'} · ${x.date.split('-').reverse().join('/')}</div></div><b class="red">${money(x.amount)}</b></div>`).join('')}</div>`};
-const hInstThisHtml=hInstHtml(hInstThis,'Parcelas a vencer neste mês',viewMonth);
-const hInstNextHtml=hInstHtml(hInstNext,'Parcelas a vencer no próximo mês',nextMonth);
+const thisMonthLabel=monthLabel(viewMonth);
+const nextMonthLabel=monthLabel(nextMonth);
+const hInstThisHtml=hInstHtml(hInstThis,`Parcelas a vencer em ${thisMonthLabel}`,viewMonth);
+const hInstNextHtml=hInstHtml(hInstNext,`Parcelas a vencer em ${nextMonthLabel}`,nextMonth);
 // Compras que serão quitadas este mês (última parcela)
 const hInstLastThis=data.installments.filter(x=>{
  const lastIdx=Number(x.total)-1;
  const lastMonth=monthShift(x.startDate,lastIdx);
  return lastMonth===viewMonth;
 });
-const hInstLastHtml=hInstLastThis.length?`<div class="card" style="margin-top:14px"><div class="row"><div class="section">Última parcela vence este mês</div><span class="muted">${money(hInstLastThis.reduce((s,x)=>s+x.amount,0))}</span></div>${hInstLastThis.map(x=>{const fullyPaid=(Number(x.paid)||0)>=Number(x.total);return `<div class="row"><div style="flex:1;min-width:0"><div class="name">${esc(x.name)}</div><div class="detail">${x.card?esc(data.cards.find(c=>c.id===x.card)?.name||'Cartão'):'Não é cartão / Outro'} · ${x.paid}/${x.total} pagas · parcela final ${monthShift(x.startDate,x.total-1).split('-').reverse().join('/')}${fullyPaid?' · <span class="green">QUITADA</span>':''}</div></div><b class="${fullyPaid?'green':'red'}">${money(x.amount)}</b></div>`}).join('')}</div>`:'';
+const lastMonthLabel=monthLabel(viewMonth);
+const hInstLastHtml=hInstLastThis.length?`<div class="card" style="margin-top:14px"><div class="row"><div class="section">Última parcela vence em ${lastMonthLabel}</div><span class="muted">${money(hInstLastThis.reduce((s,x)=>s+x.amount,0))}</span></div>${hInstLastThis.map(x=>{const fullyPaid=(Number(x.paid)||0)>=Number(x.total);return `<div class="row"><div style="flex:1;min-width:0"><div class="name">${esc(x.name)}</div><div class="detail">${x.card?esc(data.cards.find(c=>c.id===x.card)?.name||'Cartão'):'Não é cartão / Outro'} · ${x.paid}/${x.total} pagas · parcela final ${monthShift(x.startDate,x.total-1).split('-').reverse().join('/')}${fullyPaid?' · <span class="green">QUITADA</span>':''}</div></div><b class="${fullyPaid?'green':'red'}">${money(x.amount)}</b></div>`}).join('')}</div>`:'';
 const hInvProjected=data.investments.reduce((s,x)=>s+invValueAt(x,invHorizon(x)),0);
 const hInvCard=data.investments.length?`<div class="row"><span>Total investido</span><b class="green">${money(hInv)}</b></div><div class="row"><span>Valor projetado</span><b>${money(hInvProjected)}</b></div><div class="row"><span>Rendimento estimado</span><b class="green">${money(hInvProjected-hInv)}</b></div>`:empty('Nenhuma aplicação registrada. Vá em Investimentos.');
 html=`${monthNav()}
